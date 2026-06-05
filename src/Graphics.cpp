@@ -1,6 +1,8 @@
 #include "Graphics.h"
 #include "Globals.h"
 #include <cmath>
+#include <cstdio>
+#include <vector>
 
 void getShadowMatrix(float m[16], float planeY, float lx, float ly, float lz) {
     float A=0,B=1,C=0,D=-planeY;
@@ -67,7 +69,19 @@ void setCamera(float extraRotY) {
 }
 
 void setupLighting() {
-    GLfloat lp[]={20,25,-20,1}, am[]={.3f,.3f,.3f,1}, di[]={1,1,.9f,1}, sp[]={1,1,1,1};
+    GLfloat lp[]={20,25,-20,1}, am[]={.72f,.72f,.72f,1}, di[]={0.85f,0.85f,0.78f,1}, sp[]={0.5f,0.5f,0.5f,1};
+    glEnable(GL_LIGHTING); glEnable(GL_LIGHT0);
+    glLightfv(GL_LIGHT0,GL_POSITION,lp);
+    glLightfv(GL_LIGHT0,GL_AMBIENT,am);
+    glLightfv(GL_LIGHT0,GL_DIFFUSE,di);
+    glLightfv(GL_LIGHT0,GL_SPECULAR,sp);
+}
+
+// Lighting untuk mode pause: ambient penuh, tidak ada bayangan keras
+void setupPauseLighting() {
+    GLfloat am[]={0.9f,0.9f,0.9f,1}, di[]={0.5f,0.5f,0.45f,1}, sp[]={0.2f,0.2f,0.2f,1};
+    // Posisi cahaya di atas langsung (directional dari atas)
+    GLfloat lp[]={0,1,0,0};
     glEnable(GL_LIGHTING); glEnable(GL_LIGHT0);
     glLightfv(GL_LIGHT0,GL_POSITION,lp);
     glLightfv(GL_LIGHT0,GL_AMBIENT,am);
@@ -81,4 +95,89 @@ void setMaterial(float r,float g,float b,float sh){
     glMaterialfv(GL_FRONT,GL_DIFFUSE,di);
     glMaterialfv(GL_FRONT,GL_SPECULAR,sp);
     glMaterialfv(GL_FRONT,GL_SHININESS,s);
+}
+
+
+GLuint loadBMPTexture(const char* filename) {
+    FILE* file = fopen(filename, "rb");
+    if (!file) {
+        printf("Gagal membuka file BMP: %s\n", filename);
+        return 0;
+    }
+
+    unsigned char header[54];
+
+    if (fread(header, 1, 54, file) != 54) {
+        printf("File BMP tidak valid: %s\n", filename);
+        fclose(file);
+        return 0;
+    }
+
+    if (header[0] != 'B' || header[1] != 'M') {
+        printf("Bukan file BMP: %s\n", filename);
+        fclose(file);
+        return 0;
+    }
+
+    int dataPos     = *(int*)&(header[0x0A]);
+    int width       = *(int*)&(header[0x12]);
+    int height      = *(int*)&(header[0x16]);
+    short bpp       = *(short*)&(header[0x1C]);
+    int compression = *(int*)&(header[0x1E]);
+
+    if (bpp != 24 || compression != 0) {
+        printf("BMP harus 24-bit dan uncompressed: %s\n", filename);
+        fclose(file);
+        return 0;
+    }
+
+    bool bottomUp = height > 0;
+    int absHeight = height > 0 ? height : -height;
+
+    int rowPadded = (width * 3 + 3) & (~3);
+
+    std::vector<unsigned char> rawData(rowPadded * absHeight);
+    std::vector<unsigned char> rgbData(width * absHeight * 3);
+
+    fseek(file, dataPos, SEEK_SET);
+    fread(rawData.data(), 1, rowPadded * absHeight, file);
+    fclose(file);
+
+    for (int y = 0; y < absHeight; y++) {
+        int srcY = bottomUp ? (absHeight - 1 - y) : y;
+
+        for (int x = 0; x < width; x++) {
+            int srcIndex = srcY * rowPadded + x * 3;
+            int dstIndex = (y * width + x) * 3;
+
+            // BMP menyimpan warna sebagai BGR, sedangkan OpenGL butuh RGB
+            rgbData[dstIndex + 0] = rawData[srcIndex + 2]; // R
+            rgbData[dstIndex + 1] = rawData[srcIndex + 1]; // G
+            rgbData[dstIndex + 2] = rawData[srcIndex + 0]; // B
+        }
+    }
+
+    GLuint textureID;
+    glGenTextures(1, &textureID);
+    glBindTexture(GL_TEXTURE_2D, textureID);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+
+    glTexImage2D(
+        GL_TEXTURE_2D,
+        0,
+        GL_RGB,
+        width,
+        absHeight,
+        0,
+        GL_RGB,
+        GL_UNSIGNED_BYTE,
+        rgbData.data()
+    );
+
+    return textureID;
 }

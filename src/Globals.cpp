@@ -42,6 +42,17 @@ bool gameOver       = false;
 bool winGame        = false;
 bool usePerspective = true;
 
+// =====================================================================
+// PAUSE & ORBITAL CAMERA
+// =====================================================================
+bool  gamePaused         = false;
+float pauseOrbitalAngle  = 180.0f;  // derajat, mulai dari belakang mobil
+float pauseOrbitalHeight = 12.0f;
+float pauseOrbitalRadius = 10.0f;   // jarak kamera ke mobil (zoom)
+bool  pauseMouseDragging = false;
+int   pauseLastMouseX    = 0;
+int   pauseLastMouseY    = 0;
+
 float roadAnim   = 0.0f;
 int   cameraMode = 3;
 
@@ -50,7 +61,7 @@ const float SHADOW_Y = -0.58f;
 // =====================================================================
 // ANIMASI RODA — sudut rotasi global
 // =====================================================================
-float wheelRotAngle      = 0.0f;   // derajat, berputar saat bermain
+float wheelRotAngle      = 1.0f;   // derajat, berputar saat bermain
 float wheelRotAngleEnemy = 0.0f;   // roda musuh ikut berputar
 
 // =====================================================================

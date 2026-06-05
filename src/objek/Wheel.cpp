@@ -4,23 +4,21 @@
 #include <cmath>
 
 void drawDetailedWheel(float rotAngle) {
-    const float R_MAJOR  = 0.30f;  // jarak pusat torus ke pusat tabung
-    const float R_MINOR  = 0.10f;  // radius tabung ban (ketebalan ban)
-    const float RIM_R    = R_MAJOR - R_MINOR * 0.3f; // radius velg
+    const float R_MAJOR  = 0.30f;  
+    const float R_MINOR  = 0.10f;  
+    const float RIM_R    = R_MAJOR - R_MINOR * 0.3f; 
     const float HUB_R    = 0.06f;
-    const float HALF_W   = R_MINOR + 0.02f; // setengah lebar total roda
-    const int   MAJOR_S  = 32;     // segmen keliling torus
-    const int   MINOR_S  = 16;     // segmen penampang torus
+    const float HALF_W   = R_MINOR + 0.02f; 
+    const int   MAJOR_S  = 32;     
+    const int   MINOR_S  = 16;    
     const int   N_SPOKES = 5;
     const float PI       = 3.14159265f;
 
     glPushMatrix();
-    // Roda berada di bidang XY; rotasi maju pada sumbu Z
+
     glRotatef(rotAngle, 0.0f, 0.0f, 1.0f);
 
-    // ----------------------------------------------------------------
-    // BAN — torus sejati (penampang lingkaran melingkari lingkaran besar)
-    // ----------------------------------------------------------------
+   
     setMaterial(0.10f, 0.10f, 0.10f, 15.f);
     for (int i = 0; i < MAJOR_S; i++) {
         float phi0 = (float)i       / MAJOR_S * 2*PI;

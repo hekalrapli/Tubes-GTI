@@ -8,7 +8,11 @@ void drawTree(const Tree& t){
     glPushMatrix(); glRotatef(-90,1,0,0);
     GLUquadric* q=gluNewQuadric(); gluCylinder(q,.18f,.12f,t.trunkH,8,2); gluDeleteQuadric(q);
     glPopMatrix();
-    float gr=.15f+(t.seed%3)*.12f,gg=.55f+(t.seed%4)*.07f,gb=.10f+(t.seed%2)*.06f;
+    float gr = 0.15f + (t.seed % 5) * 0.08f;
+    float gg = 0.35f + (t.seed % 4) * 0.10f;
+    float gb = 0.05f + (t.seed % 3) * 0.04f;
+  
+  
     setMaterial(gr,gg,gb);
     glPushMatrix(); glTranslatef(0,t.trunkH,0); glutSolidSphere(t.crownR,10,8); glPopMatrix();
     glPushMatrix(); glTranslatef(0,t.trunkH+t.crownR*.5f,0); glutSolidSphere(t.crownR*.65f,10,8); glPopMatrix();

@@ -11,6 +11,8 @@ void end2D();
 void setProjection();
 void setCamera(float extraRotY = 0.0f);
 void setupLighting();
+void setupPauseLighting();
 void setMaterial(float r, float g, float b, float sh = 50.0f);
+GLuint loadBMPTexture(const char* filename);
 
 #endif

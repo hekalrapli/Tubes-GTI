@@ -136,7 +136,9 @@ void drawScene3D(float camRotY){
     setProjection();
     setCamera(camRotY);
     setupLighting();
-    drawSun(); drawRoad();
+    drawSkybox(0.0f, 0.0f);  // 2D fullscreen gradient, selalu nutup background
+    drawSun();
+    drawRoad();
 
     for(int i=0;i<(int)trees.size();i++){ glPushMatrix(); glTranslatef(trees[i].x,0,trees[i].z); drawTreeShadow(trees[i]); glPopMatrix(); }
     for(int i=0;i<(int)buildings.size();i++){ glPushMatrix(); glTranslatef(buildings[i].x,0,buildings[i].z); drawBuildingShadow(buildings[i]); glPopMatrix(); }
@@ -220,8 +222,55 @@ void display(){
         drawStartScreen();
     }
     else if(gameState==STATE_PLAYING){
-        drawScene3D();
-        drawHUD();
+        if(gamePaused){
+            // Mode orbital saat pause: kamera mengelilingi posisi mobil player
+            float rad = pauseOrbitalAngle * 3.14159f / 180.0f;
+            float camR = pauseOrbitalRadius;
+            float cx = playerX + camR * sinf(rad);
+            float cz = playerZ + camR * cosf(rad);
+            float cy = pauseOrbitalHeight;
+
+            setProjection();
+            glLoadIdentity();
+            gluLookAt(cx, cy, cz,
+                      playerX, 0.5f, playerZ,
+                      0, 1, 0);
+
+            // Lighting merata tanpa arah keras agar semua sisi bangunan kelihatan
+            setupPauseLighting();
+
+            // Skybox dulu (2D fullscreen gradient, tidak kena matrix 3D)
+            drawSkybox(playerX, playerZ);
+
+            // Matahari relatif ke player agar selalu kelihatan di langit
+            glPushMatrix();
+            glTranslatef(playerX + 20.0f, 25.0f, playerZ - 20.0f);
+            glDisable(GL_LIGHTING); glColor3f(1,.9f,0); glutSolidSphere(3,32,32);
+            glEnable(GL_LIGHTING);
+            glPopMatrix();
+
+            drawRoad();
+
+            for(int i=0;i<(int)trees.size();i++){ glPushMatrix(); glTranslatef(trees[i].x,0,trees[i].z); drawTreeShadow(trees[i]); glPopMatrix(); }
+            for(int i=0;i<(int)buildings.size();i++){ glPushMatrix(); glTranslatef(buildings[i].x,0,buildings[i].z); drawBuildingShadow(buildings[i]); glPopMatrix(); }
+            drawCarShadow(playerX, playerZ);
+            for(int i=0;i<(int)enemies.size();i++) drawCarShadow(enemies[i].x, enemies[i].z);
+            for(int i=0;i<(int)trees.size();i++){ glPushMatrix(); glTranslatef(trees[i].x,-.6f,trees[i].z); drawTree(trees[i]); glPopMatrix(); }
+            for(int i=0;i<(int)buildings.size();i++){ glPushMatrix(); glTranslatef(buildings[i].x,-.6f,buildings[i].z); drawBuilding(buildings[i]); glPopMatrix(); }
+            glPushMatrix(); glTranslatef(playerX,0,playerZ); drawPlayerCar(); glPopMatrix();
+            for(int i=0;i<(int)enemies.size();i++){ glPushMatrix(); glTranslatef(enemies[i].x,0,enemies[i].z); drawEnemyCar(); glPopMatrix(); }
+            for(int i=0;i<(int)nosPickups.size();i++){
+                if(!nosPickups[i].active) continue;
+                float bobY=.3f+sinf(nosPickups[i].bobTimer)*.2f;
+                glPushMatrix(); glTranslatef(nosPickups[i].x,bobY,nosPickups[i].z); drawNosShadow(); glPopMatrix();
+                glPushMatrix(); glTranslatef(nosPickups[i].x,bobY,nosPickups[i].z); drawNosObject(nosPickups[i].rotAngle); glPopMatrix();
+            }
+            float fz=playerZ-(targetDistance-distanceTraveled)/5.f;
+            if(fz>-90) drawFinishLine(fz);
+        } else {
+            drawScene3D();
+            drawHUD();
+        }
     }
     else if(gameState==STATE_CRASH){
         drawScene3D();
@@ -243,6 +292,13 @@ void display(){
 void update(int value){
     startAnimTimer += 0.016f;
 
+    // Saat pause: skip seluruh logika game, hanya redisplay
+    if(gamePaused){
+        glutPostRedisplay();
+        glutTimerFunc(16,update,0);
+        return;
+    }
+
     if(gameState==STATE_PLAYING){
         currentSpeed=baseSpeed+distanceTraveled*speedIncrement;
         if(currentSpeed>maxSpeed) currentSpeed=maxSpeed;
@@ -253,8 +309,10 @@ void update(int value){
         // Keliling roda ~2*pi*0.32 = 2.01 unit; konversi ke derajat per frame
         float wheelCircumference = 2.0f * 3.14159f * 0.32f;
         float degPerFrame = (speed / wheelCircumference) * 360.0f;
-        wheelRotAngle      += degPerFrame; if(wheelRotAngle      >= 360.f) wheelRotAngle      -= 360.f;
-        wheelRotAngleEnemy += degPerFrame; if(wheelRotAngleEnemy >= 360.f) wheelRotAngleEnemy -= 360.f;
+        wheelRotAngle      += degPerFrame; 
+        if(wheelRotAngle      >= 360.f) wheelRotAngle      -= 360.f;
+        wheelRotAngleEnemy += degPerFrame; 
+        if(wheelRotAngleEnemy >= 360.f) wheelRotAngleEnemy -= 360.f;
 
         distanceTraveled+=speed*5;
         roadAnim+=speed; if(roadAnim>4)roadAnim=0;
@@ -367,7 +425,7 @@ void update(int value){
 // INPUT
 // =====================================================================
 void specialKeyboard(int key,int x,int y){
-    if(gameState!=STATE_PLAYING) return;
+    if(gameState!=STATE_PLAYING || gamePaused) return;
     if(key==GLUT_KEY_LEFT  && playerLane>0){ playerLane--; playerTargetX=lanePos[playerLane]; }
     if(key==GLUT_KEY_RIGHT && playerLane<2){ playerLane++; playerTargetX=lanePos[playerLane]; }
 }
@@ -382,9 +440,19 @@ void keyboard(unsigned char key,int x,int y){
         resetToStart();
         return;
     }
-    if(gameState!=STATE_PLAYING) return;
-    if(key=='p'||key=='P') usePerspective=true;
-    else if(key=='o'||key=='O') usePerspective=false;
+    // Pause toggle — hanya saat STATE_PLAYING
+    if((key=='p'||key=='P') && gameState==STATE_PLAYING){
+        gamePaused = !gamePaused;
+        if(gamePaused){
+            // Reset sudut orbital ke posisi belakang mobil saat pause
+            pauseOrbitalAngle  = 180.0f;
+            pauseOrbitalHeight = 12.0f;
+            pauseOrbitalRadius = 10.0f;
+        }
+        return;
+    }
+    if(gameState!=STATE_PLAYING || gamePaused) return;
+    if(key=='o'||key=='O') usePerspective=!usePerspective;
     else if(key=='1') cameraMode=1;
     else if(key=='2') cameraMode=2;
     else if(key=='3') cameraMode=3;
@@ -404,7 +472,7 @@ void reshape(int w,int h){
 }
 
 void init(){
-    glClearColor(.45f,.7f,1,1);
+    glClearColor(0.55f, 0.82f, 1.0f, 1.0f);
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_NORMALIZE);
     glShadeModel(GL_SMOOTH);
@@ -412,5 +480,38 @@ void init(){
     srand((unsigned)time(NULL));
     playerX=playerTargetX=lanePos[1];
     initEnvironment();
+    initCarTextures();
     gameState=STATE_START;
+}
+
+// =====================================================================
+// MOUSE — orbital camera saat pause
+// =====================================================================
+void mouseButton(int button, int state, int x, int y){
+    if(gamePaused && gameState==STATE_PLAYING){
+        if(button==GLUT_LEFT_BUTTON){
+            pauseMouseDragging = (state==GLUT_DOWN);
+            pauseLastMouseX = x;
+            pauseLastMouseY = y;
+        }
+        // Scroll wheel zoom: button 3 = scroll up (zoom in), button 4 = scroll down (zoom out)
+        if(state==GLUT_DOWN){
+            if(button==3){ pauseOrbitalRadius -= 1.0f; if(pauseOrbitalRadius < 2.0f) pauseOrbitalRadius = 2.0f; glutPostRedisplay(); }
+            if(button==4){ pauseOrbitalRadius += 1.0f; if(pauseOrbitalRadius > 30.0f) pauseOrbitalRadius = 30.0f; glutPostRedisplay(); }
+        }
+    }
+}
+
+void mouseMotion(int x, int y){
+    if(gamePaused && gameState==STATE_PLAYING && pauseMouseDragging){
+        int dx = x - pauseLastMouseX;
+        int dy = y - pauseLastMouseY;
+        pauseOrbitalAngle  += dx * 0.5f;
+        pauseOrbitalHeight -= dy * 0.05f;
+        if(pauseOrbitalHeight <  2.0f) pauseOrbitalHeight =  2.0f;
+        if(pauseOrbitalHeight > 20.0f) pauseOrbitalHeight = 20.0f;
+        pauseLastMouseX = x;
+        pauseLastMouseY = y;
+        glutPostRedisplay();
+    }
 }

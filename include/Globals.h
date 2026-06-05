@@ -41,6 +41,14 @@ extern bool gameOver;
 extern bool winGame;
 extern bool usePerspective;
 
+extern bool gamePaused;
+extern float pauseOrbitalAngle;
+extern float pauseOrbitalHeight;
+extern float pauseOrbitalRadius;
+extern bool  pauseMouseDragging;
+extern int   pauseLastMouseX;
+extern int   pauseLastMouseY;
+
 extern float roadAnim;
 extern int cameraMode;
 
